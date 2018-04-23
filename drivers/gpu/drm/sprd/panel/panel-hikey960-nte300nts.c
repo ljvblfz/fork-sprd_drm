@@ -31,7 +31,7 @@
 
 #define REGFLAG_DELAY	0XFFE
 
-struct hikey_panel {
+struct sprd_panel {
 	struct drm_panel base;
 	struct mipi_dsi_device *dsi;
 
@@ -100,7 +100,7 @@ static struct dsi_panel_cmd nte300nts_off_cmds[] = {
 	{REGFLAG_DELAY, 80, {} },
 };
 
-static int hikey_panel_write_cmds(struct mipi_dsi_device *dsi,
+static int sprd_panel_write_cmds(struct mipi_dsi_device *dsi,
 				  struct dsi_panel_cmd *cmds,
 				  u32 count)
 {
@@ -123,14 +123,14 @@ static int hikey_panel_write_cmds(struct mipi_dsi_device *dsi,
 	return ret;
 }
 
-static inline struct hikey_panel *to_hikey_panel(struct drm_panel *panel)
+static inline struct sprd_panel *to_sprd_panel(struct drm_panel *panel)
 {
-	return container_of(panel, struct hikey_panel, base);
+	return container_of(panel, struct sprd_panel, base);
 }
 
-static int hikey_panel_unprepare(struct drm_panel *p)
+static int sprd_panel_unprepare(struct drm_panel *p)
 {
-	struct hikey_panel *panel = to_hikey_panel(p);
+	struct sprd_panel *panel = to_sprd_panel(p);
 
 	if (!panel->prepared)
 		return 0;
@@ -143,9 +143,9 @@ static int hikey_panel_unprepare(struct drm_panel *p)
 	return 0;
 }
 
-static int hikey_panel_prepare(struct drm_panel *p)
+static int sprd_panel_prepare(struct drm_panel *p)
 {
-	struct hikey_panel *panel = to_hikey_panel(p);
+	struct sprd_panel *panel = to_sprd_panel(p);
 	int ret;
 
 	if (panel->prepared)
@@ -158,7 +158,7 @@ static int hikey_panel_prepare(struct drm_panel *p)
 	msleep(250);
 
 	/* init the panel */
-	ret = hikey_panel_write_cmds(panel->dsi, nte300nts_init_cmds,
+	ret = sprd_panel_write_cmds(panel->dsi, nte300nts_init_cmds,
 				     ARRAY_SIZE(nte300nts_init_cmds));
 	if (ret < 0)
 		return ret;
@@ -168,15 +168,15 @@ static int hikey_panel_prepare(struct drm_panel *p)
 	return 0;
 }
 
-static int hikey_panel_disable(struct drm_panel *p)
+static int sprd_panel_disable(struct drm_panel *p)
 {
-	struct hikey_panel *panel = to_hikey_panel(p);
+	struct sprd_panel *panel = to_sprd_panel(p);
 	int ret;
 
 	if (!panel->enabled)
 		return 0;
 
-	ret = hikey_panel_write_cmds(panel->dsi, nte300nts_off_cmds,
+	ret = sprd_panel_write_cmds(panel->dsi, nte300nts_off_cmds,
 				     ARRAY_SIZE(nte300nts_off_cmds));
 	if (ret < 0)
 		return ret;
@@ -186,9 +186,9 @@ static int hikey_panel_disable(struct drm_panel *p)
 	return 0;
 }
 
-static int hikey_panel_enable(struct drm_panel *p)
+static int sprd_panel_enable(struct drm_panel *p)
 {
-	struct hikey_panel *panel = to_hikey_panel(p);
+	struct sprd_panel *panel = to_sprd_panel(p);
 
 	if (panel->enabled)
 		return 0;
@@ -216,7 +216,7 @@ static const struct drm_display_mode default_mode = {
 	.vtotal = 1920 + 2 + 8 + 8,
 };
 
-static int hikey_panel_get_modes(struct drm_panel *panel)
+static int sprd_panel_get_modes(struct drm_panel *panel)
 {
 	struct drm_display_mode *mode;
 
@@ -238,21 +238,21 @@ static int hikey_panel_get_modes(struct drm_panel *panel)
 	return 1;
 }
 
-static const struct drm_panel_funcs hikey_panel_funcs = {
-	.get_modes = hikey_panel_get_modes,
-	.enable = hikey_panel_enable,
-	.disable = hikey_panel_disable,
-	.prepare = hikey_panel_prepare,
-	.unprepare = hikey_panel_unprepare,
+static const struct drm_panel_funcs sprd_panel_funcs = {
+	.get_modes = sprd_panel_get_modes,
+	.enable = sprd_panel_enable,
+	.disable = sprd_panel_disable,
+	.prepare = sprd_panel_prepare,
+	.unprepare = sprd_panel_unprepare,
 };
 
-static int hikey_panel_add(struct hikey_panel *panel)
+static int sprd_panel_add(struct sprd_panel *panel)
 {
 	struct device *dev = &panel->dsi->dev;
 	int ret;
 
 	drm_panel_init(&panel->base);
-	panel->base.funcs = &hikey_panel_funcs;
+	panel->base.funcs = &sprd_panel_funcs;
 	panel->base.dev = dev;
 
 	ret = drm_panel_add(&panel->base);
@@ -262,13 +262,13 @@ static int hikey_panel_add(struct hikey_panel *panel)
 	return 0;
 }
 
-static void hikey_panel_del(struct hikey_panel *panel)
+static void sprd_panel_del(struct sprd_panel *panel)
 {
 	if (panel->base.dev)
 		drm_panel_remove(&panel->base);
 }
 
-static int hikey_panel_parse_dt(struct hikey_panel *panel)
+static int sprd_panel_parse_dt(struct sprd_panel *panel)
 {
 	struct device *dev = &panel->dsi->dev;
 	int ret = 0;
@@ -305,7 +305,7 @@ static int hikey_panel_parse_dt(struct hikey_panel *panel)
 	return 0;
 }
 
-static int hikey_panel_attach_dsi(struct mipi_dsi_device *dsi)
+static int sprd_panel_attach_dsi(struct mipi_dsi_device *dsi)
 {
 	int ret;
 
@@ -325,10 +325,10 @@ static int hikey_panel_attach_dsi(struct mipi_dsi_device *dsi)
 	return 0;
 }
 
-static int hikey_panel_probe(struct mipi_dsi_device *dsi)
+static int sprd_panel_probe(struct mipi_dsi_device *dsi)
 {
 	struct device *dev = &dsi->dev;
-	struct hikey_panel *panel;
+	struct sprd_panel *panel;
 	int ret;
 
 	panel = devm_kzalloc(dev, sizeof(*panel), GFP_KERNEL);
@@ -336,17 +336,17 @@ static int hikey_panel_probe(struct mipi_dsi_device *dsi)
 		return -ENOMEM;
 
 	panel->dsi = dsi;
-	ret = hikey_panel_parse_dt(panel);
+	ret = sprd_panel_parse_dt(panel);
 	if (ret)
 		return ret;
 
-	ret = hikey_panel_add(panel);
+	ret = sprd_panel_add(panel);
 	if (ret)
 		return ret;
 
-	ret = hikey_panel_attach_dsi(dsi);
+	ret = sprd_panel_attach_dsi(dsi);
 	if (ret) {
-		hikey_panel_del(panel);
+		sprd_panel_del(panel);
 		return ret;
 	}
 
@@ -355,12 +355,12 @@ static int hikey_panel_probe(struct mipi_dsi_device *dsi)
 	return 0;
 }
 
-static int hikey_panel_remove(struct mipi_dsi_device *dsi)
+static int sprd_panel_remove(struct mipi_dsi_device *dsi)
 {
-	struct hikey_panel *panel = mipi_dsi_get_drvdata(dsi);
+	struct sprd_panel *panel = mipi_dsi_get_drvdata(dsi);
 	int ret;
 
-	ret = hikey_panel_disable(&panel->base);
+	ret = sprd_panel_disable(&panel->base);
 	if (ret < 0)
 		DRM_ERROR("failed to disable panel: %d\n", ret);
 
@@ -369,34 +369,34 @@ static int hikey_panel_remove(struct mipi_dsi_device *dsi)
 		DRM_ERROR("failed to detach from DSI host: %d\n", ret);
 
 	drm_panel_detach(&panel->base);
-	hikey_panel_del(panel);
+	sprd_panel_del(panel);
 
 	return 0;
 }
 
-static void hikey_panel_shutdown(struct mipi_dsi_device *dsi)
+static void sprd_panel_shutdown(struct mipi_dsi_device *dsi)
 {
-	struct hikey_panel *panel = mipi_dsi_get_drvdata(dsi);
+	struct sprd_panel *panel = mipi_dsi_get_drvdata(dsi);
 
-	hikey_panel_disable(&panel->base);
+	sprd_panel_disable(&panel->base);
 }
 
 static const struct of_device_id panel_of_match[] = {
-	{ .compatible = "hisilicon,mipi-hikey", },
+	{ .compatible = "hisilicon,mipi-sprd", },
 	{ }
 };
 MODULE_DEVICE_TABLE(of, panel_of_match);
 
-static struct mipi_dsi_driver hikey_panel_driver = {
+static struct mipi_dsi_driver sprd_panel_driver = {
 	.driver = {
-		.name = "hikey-lcd-panel",
+		.name = "sprd-lcd-panel",
 		.of_match_table = panel_of_match,
 	},
-	.probe = hikey_panel_probe,
-	.remove = hikey_panel_remove,
-	.shutdown = hikey_panel_shutdown,
+	.probe = sprd_panel_probe,
+	.remove = sprd_panel_remove,
+	.shutdown = sprd_panel_shutdown,
 };
-module_mipi_dsi_driver(hikey_panel_driver);
+module_mipi_dsi_driver(sprd_panel_driver);
 
 MODULE_DESCRIPTION("NTE300NTS (1920x1200) video mode panel driver");
 MODULE_LICENSE("GPL v2");
