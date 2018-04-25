@@ -31,6 +31,20 @@
 #include <drm/drm_mipi_dsi.h>
 #include <drm/drm_panel.h>
 
+struct sprd_panel {
+	struct drm_panel base;
+	struct mipi_dsi_device *dsi;
+
+	bool prepared;
+	bool enabled;
+
+/*	struct gpio_desc *gpio_pwr_en;
+	struct gpio_desc *gpio_bl_en;
+	struct gpio_desc *gpio_pwm;
+
+	struct regulator *vdd;*/
+};
+
 //#define CMD_MODE_ENABLE
 static uint8_t init_data[] = {
 	//CMD2_P0
@@ -596,50 +610,41 @@ static int mipi_dsi_send_cmds(struct sprd_dsi *dsi, void *data)
 
 	for (; cmds->data_type != CMD_END;) {
 		len = (cmds->wc_h << 8) | cmds->wc_l;
-		mipi_dsi_gen_write(dsi, cmds->payload, len);
+		mipi_dsi_generic_write(dsi, cmds->payload, len);
 		if (cmds->wait)
 			msleep(cmds->wait);
 		cmds = (struct dsi_cmd_desc *)(cmds->payload + len);
 	}
+
 	return 0;
 }
 
-static int nt35695_init(void)
+static int32_t mipi_panel_init(struct sprd_panel *pd)
 {
-	struct sprd_dsi *dsi = &dsi_device;
-	struct sprd_dphy *dphy = &dphy_device;
+	struct sprd_dsi *dsi = dev_get_drvdata(pd->intf);
+	struct device *dev = dev_get_next(&dsi->dev);
+	struct sprd_dphy *dphy = dev_get_drvdata(dev);
+	struct panel_info *panel = pd->panel;
 
 	mipi_dsi_lp_cmd_enable(dsi, true);
-	mipi_dsi_send_cmds(dsi, init_data);
-#ifdef CMD_MODE_ENABLE
-	mipi_dsi_set_work_mode(dsi, SPRD_MIPI_MODE_CMD);
-#else
-	mipi_dsi_set_work_mode(dsi, SPRD_MIPI_MODE_VIDEO);
-#endif
+	mipi_dsi_send_cmds(dsi, panel->cmd_codes[CMD_CODE_INIT]);
+	mipi_dsi_set_work_mode(dsi, panel->work_mode);
 	mipi_dsi_state_reset(dsi);
 	mipi_dphy_hs_clk_en(dphy, true);
 
 	return 0;
 }
 
-static int nt35695_readid(void)
+static int32_t mipi_panel_sleep_in(struct sprd_panel *pd)
 {
-	struct sprd_dsi *dsi = &dsi_device;
-	uint8_t read_buf[4] = {0};
-	uint8_t pwr_val;
+	struct sprd_dsi *dsi = dev_get_drvdata(pd->intf);
+	struct panel_info *panel = pd->panel;
 
+	mipi_dsi_set_work_mode(dsi, SPRD_MIPI_MODE_CMD);
 	mipi_dsi_lp_cmd_enable(dsi, true);
-	mipi_dsi_set_max_return_size(dsi, 3);
-	mipi_dsi_dcs_read(dsi, 0xDA, &read_buf[0], 1);
-	mipi_dsi_dcs_read(dsi, 0xDB, &read_buf[1], 1);
-	mipi_dsi_dcs_read(dsi, 0xDC, &read_buf[2], 1);
-	if((0x0 == read_buf[0]) && (0x80 == read_buf[1]) && (0x0 == read_buf[2])) {
-		pr_info("nt35695 read id success!\n");
-		return 0;
-        }
+	mipi_dsi_send_cmds(dsi, panel->cmd_codes[CMD_CODE_SLEEP_IN]);
 
-	pr_err("nt35695 read id failed!\n");
-	return -1;
+	return 0;
 }
 
 static int nt35695_power(int on)
@@ -668,49 +673,6 @@ static int nt35695_power(int on)
 	return 0;
 }
 
-static struct panel_ops nt35695_ops = {
-	.init = nt35695_init,
-	.read_id = nt35695_readid,
-	.power = nt35695_power,
-};
-
-static struct panel_info nt35695_info = {
-	/* common parameters */
-	.lcd_name = "lcd_nt35695_truly_mipi_fhd",
-	.type = SPRD_PANEL_TYPE_MIPI,
-	.bpp = 24,
-//	.fps = 60,
-	.width = 1080,
-	.height = 1920,
-
-	/* DPI specific parameters */
-	.pixel_clk = 153600000, /*Hz*/
-	.rgb_timing = {
-		.hfp = 176,
-		.hbp = 16,
-		.hsync = 10,
-		.vfp = 32,
-		.vbp = 32,
-		.vsync = 4,
-	},
-
-	/* MIPI DSI specific parameters */
-	.phy_freq = 9798*100,
-	.lane_num = 4,
-#ifdef CMD_MODE_ENABLE
-	.work_mode = SPRD_MIPI_MODE_CMD,
-#else
-	.work_mode = SPRD_MIPI_MODE_VIDEO,
-#endif
-	.burst_mode = PANEL_VIDEO_BURST_MODE,
-	.nc_clk_en = false,
-};
-
-struct panel_driver nt35695_truly_driver = {
-	.info = &nt35695_info,
-	.ops = &nt35695_ops,
-};
-
 static inline struct sprd_panel *to_sprd_panel(struct drm_panel *panel)
 {
 	return container_of(panel, struct sprd_panel, base);
@@ -723,8 +685,7 @@ static int sprd_panel_unprepare(struct drm_panel *p)
 	if (!panel->prepared)
 		return 0;
 
-	gpiod_set_value(panel->gpio_bl_en, 0);
-	gpiod_set_value(panel->gpio_pwm, 0);
+	nt35695_power(false);
 
 	panel->prepared = false;
 
@@ -739,15 +700,8 @@ static int sprd_panel_prepare(struct drm_panel *p)
 	if (panel->prepared)
 		return 0;
 
-	/*
-	 * A minimum delay of 250ms is required after power-up until commands
-	 * can be sent
-	 */
-	msleep(250);
+	nt35695_power(true);
 
-	/* init the panel */
-	ret = sprd_panel_write_cmds(panel->dsi, nte300nts_init_cmds,
-				     ARRAY_SIZE(nte300nts_init_cmds));
 	if (ret < 0)
 		return ret;
 
@@ -759,13 +713,13 @@ static int sprd_panel_prepare(struct drm_panel *p)
 static int sprd_panel_disable(struct drm_panel *p)
 {
 	struct sprd_panel *panel = to_sprd_panel(p);
-	int ret;
+	int ret = 0;
 
 	if (!panel->enabled)
 		return 0;
 
-	ret = sprd_panel_write_cmds(panel->dsi, nte300nts_off_cmds,
-				     ARRAY_SIZE(nte300nts_off_cmds));
+	mipi_panel_sleep_in(panel);
+
 	if (ret < 0)
 		return ret;
 
@@ -781,9 +735,8 @@ static int sprd_panel_enable(struct drm_panel *p)
 	if (panel->enabled)
 		return 0;
 
-	msleep(200);
-	gpiod_set_value(panel->gpio_bl_en, 1);
-	gpiod_set_value(panel->gpio_pwm, 1);
+	/* init the panel */
+	mipi_panel_init(panel);
 
 	panel->enabled = true;
 
@@ -791,17 +744,17 @@ static int sprd_panel_enable(struct drm_panel *p)
 }
 
 static const struct drm_display_mode default_mode = {
-	.clock = 144000,
+	.clock = 153600, /*153.6Mhz*/
 
-	.hdisplay = 1200,
-	.hsync_start = 1200 + 200,
-	.hsync_end = 1200 + 200 + 12,
-	.htotal = 1200 + 12 + 60 + 200,
+	.hdisplay = 1080,
+	.hsync_start = 1080 + 176,
+	.hsync_end = 1080 + 176 + 10,
+	.htotal = 1080 + 176 + 10 + 16,
 
 	.vdisplay = 1920,
-	.vsync_start = 1920 + 8,
-	.vsync_end = 1920 + 8 + 2,
-	.vtotal = 1920 + 2 + 8 + 8,
+	.vsync_start = 1920 + 32,
+	.vsync_end = 1920 + 32 + 4,
+	.vtotal = 1920 + 32 + 4 + 32,
 };
 
 static int sprd_panel_get_modes(struct drm_panel *panel)
@@ -820,8 +773,8 @@ static int sprd_panel_get_modes(struct drm_panel *panel)
 
 	drm_mode_probed_add(panel->connector, mode);
 
-	panel->connector->display_info.width_mm = 94;
-	panel->connector->display_info.height_mm = 151;
+	panel->connector->display_info.width_mm = 68;
+	panel->connector->display_info.height_mm = 121;
 
 	return 1;
 }
@@ -861,35 +814,6 @@ static int sprd_panel_parse_dt(struct sprd_panel *panel)
 	struct device *dev = &panel->dsi->dev;
 	int ret = 0;
 
-	panel->gpio_pwr_en =
-		devm_gpiod_get_optional(dev, "pwr-en", GPIOD_OUT_HIGH);
-	if (IS_ERR(panel->gpio_pwr_en))
-		return PTR_ERR(panel->gpio_pwr_en);
-
-	panel->gpio_bl_en =
-		devm_gpiod_get_optional(dev, "bl-en", GPIOD_OUT_LOW);
-	if (IS_ERR(panel->gpio_bl_en))
-		return PTR_ERR(panel->gpio_bl_en);
-
-	panel->gpio_pwm =
-		devm_gpiod_get_optional(dev, "pwm", GPIOD_OUT_LOW);
-	if (IS_ERR(panel->gpio_pwm))
-		return PTR_ERR(panel->gpio_pwm);
-
-	panel->vdd = devm_regulator_get(dev, "vdd");
-	if (IS_ERR(panel->vdd)) {
-		ret = PTR_ERR(panel->vdd);
-		return ret;
-	}
-
-	ret = regulator_set_voltage(panel->vdd, 1800000, 1800000);
-	if (ret)
-		return ret;
-
-	ret = regulator_enable(panel->vdd);
-	if (ret)
-		return ret;
-
 	return 0;
 }
 
@@ -897,7 +821,7 @@ static int sprd_panel_attach_dsi(struct mipi_dsi_device *dsi)
 {
 	int ret;
 
-	dsi->phy_clock = 864000; /* in kHz */
+	dsi->phy_clock = 1000000; /* in kbps */
 	dsi->lanes = 4;
 	dsi->format = MIPI_DSI_FMT_RGB888;
 	dsi->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_SYNC_PULSE |
