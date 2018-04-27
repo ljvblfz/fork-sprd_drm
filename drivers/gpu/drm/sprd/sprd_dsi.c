@@ -228,7 +228,7 @@ struct dsi_phy_range {
 	u32 hstx_ckg_sel;
 };
 
-static const struct dsi_phy_range dphy_range_info[] = {
+/*static const struct dsi_phy_range dphy_range_info[] = {
 	{   46875,    62500,   1,    7 },
 	{   62500,    93750,   0,    7 },
 	{   93750,   125000,   1,    6 },
@@ -239,7 +239,7 @@ static const struct dsi_phy_range dphy_range_info[] = {
 	{  500000,   750000,   0,    4 },
 	{  750000,  1000000,   1,    0 },
 	{ 1000000,  1500000,   0,    0 }
-};
+};*/
 
 void dsi_set_output_client(struct drm_device *dev)
 {
