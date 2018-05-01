@@ -24,7 +24,7 @@
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_crtc_helper.h>
 
-#include "sprd_drm_drv.h"
+#include "sprd_drm.h"
 
 
 #ifdef CONFIG_DRM_FBDEV_EMULATION
@@ -41,7 +41,7 @@ static int sprd_drm_kms_cleanup(struct drm_device *dev)
 	struct sprd_drm_private *priv = dev->dev_private;
 
 	if (priv->fbdev) {
-		sprd_drm_fbdev_fini(dev);
+//		sprd_drm_fbdev_fini(dev);
 		priv->fbdev = NULL;
 	}
 
@@ -59,12 +59,12 @@ static void sprd_fbdev_output_poll_changed(struct drm_device *dev)
 {
 	struct sprd_drm_private *priv = dev->dev_private;
 
-	dsi_set_output_client(dev);
+//	dsi_set_output_client(dev);
 
 	if (priv->fbdev)
 		drm_fb_helper_hotplug_event(priv->fbdev);
-	else
-		priv->fbdev = sprd_drm_fbdev_init(dev);
+/*	else
+		priv->fbdev = sprd_drm_fbdev_init(dev);*/
 }
 
 static const struct drm_mode_config_funcs sprd_drm_mode_config_funcs = {
@@ -188,7 +188,7 @@ err:
 	return ret;
 }
 
-static struct drm_driver sprd_drm_driver = {
+static struct drm_driver sprd_drm_drv = {
 	.driver_features	= DRIVER_GEM | DRIVER_MODESET | DRIVER_PRIME |
 				  DRIVER_ATOMIC | DRIVER_HAVE_IRQ | DRIVER_RENDER,
 	.fops				= &sprd_drm_fops,
@@ -234,11 +234,11 @@ static int compare_dev(struct device *dev, void *data)
 
 static int sprd_drm_bind(struct device *dev)
 {
-	struct drm_driver *driver = &sprd_drm_driver;
+	struct drm_driver *driver = &sprd_drm_drv;
 	struct drm_device *drm_dev;
 	int ret;
 
-	//drm_platform_init(&sprd_drm_driver, to_platform_device(dev));
+	//drm_platform_init(&sprd_drm_drv, to_platform_device(dev));
 
 	drm_dev = drm_dev_alloc(driver, dev);
 	if (!drm_dev)

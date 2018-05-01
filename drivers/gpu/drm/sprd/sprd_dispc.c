@@ -34,12 +34,13 @@
 #include <drm/drm_gem_cma_helper.h>
 #include <drm/drm_fb_cma_helper.h>
 
-#include "kirin_drm_drv.h"
+#include "sprd_drm.h"
+#include "sprd_dispc.h"
 
-#include "kirin_drm_dpe_utils.h"
-#include "kirin_dpe_reg.h"
+//#include "sprd_drm_dpe_utils.h"
+//#include "sprd_dpe_reg.h"
 
-#define DTS_COMP_DSS_NAME "hisilicon,hi3660-dpe"
+#define DTS_COMP_DSS_NAME "sprd,display-controller"
 
 #define DSS_DEBUG	0
 
@@ -133,7 +134,7 @@ static void dss_ldi_set_mode(struct dss_crtc *acrtc)
 
 static int dss_power_up(struct dss_crtc *acrtc)
 {
-	int ret;
+//	int ret;
 	struct dss_hw_ctx *ctx = acrtc->ctx;
 
 /*	ret = clk_prepare_enable(ctx->dss_pxl0_clk);
@@ -190,7 +191,7 @@ static void dss_power_down(struct dss_crtc *acrtc)
 
 static int dss_enable_vblank(struct drm_device *dev, unsigned int pipe)
 {
-	struct kirin_drm_private *priv = dev->dev_private;
+	struct sprd_drm_private *priv = dev->dev_private;
 	struct dss_crtc *acrtc = to_dss_crtc(priv->crtc[pipe]);
 	struct dss_hw_ctx *ctx = acrtc->ctx;
 
@@ -202,7 +203,7 @@ static int dss_enable_vblank(struct drm_device *dev, unsigned int pipe)
 
 static void dss_disable_vblank(struct drm_device *dev, unsigned int pipe)
 {
-	struct kirin_drm_private *priv = dev->dev_private;
+	struct sprd_drm_private *priv = dev->dev_private;
 	struct dss_crtc *acrtc = to_dss_crtc(priv->crtc[pipe]);
 	struct dss_hw_ctx *ctx = acrtc->ctx;
 
@@ -340,7 +341,7 @@ static const struct drm_crtc_funcs dss_crtc_funcs = {
 static int dss_crtc_init(struct drm_device *dev, struct drm_crtc *crtc,
 			 struct drm_plane *plane)
 {
-	struct kirin_drm_private *priv = dev->dev_private;
+	struct sprd_drm_private *priv = dev->dev_private;
 	struct device_node *port;
 	int ret;
 
@@ -431,6 +432,7 @@ static int dss_plane_atomic_check(struct drm_plane *plane,
 static void dss_plane_atomic_update(struct drm_plane *plane,
 				    struct drm_plane_state *old_state)
 {
+	/* TODO: flip operation */
 	//hisi_fb_pan_display(plane);
 }
 
@@ -500,9 +502,9 @@ static int dss_plane_init(struct drm_device *dev, struct dss_plane *aplane,
 
 static int dss_dts_parse(struct platform_device *pdev, struct dss_hw_ctx *ctx)
 {
-	struct device *dev = &pdev->dev;
+//	struct device *dev = &pdev->dev;
 	struct device_node *np = NULL;
-	int ret = 0;
+//	int ret = 0;
 
 	np = of_find_compatible_node(NULL, NULL, DTS_COMP_DSS_NAME);
 	if (!np) {
@@ -692,7 +694,7 @@ static void dss_drm_cleanup(struct drm_device *dev)
 	drm_crtc_cleanup(crtc);
 }
 
-const struct kirin_dc_ops dss_dc_ops = {
+const struct sprd_dc_ops dss_dc_ops = {
 	.init = dss_drm_init,
 	.cleanup = dss_drm_cleanup
 };
